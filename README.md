@@ -96,6 +96,8 @@ Click the game window to focus it before running.
 
 **Notes**
 - If the agent cannot control the game on macOS, enable Accessibility for your terminal or IDE.
+- On Apple Silicon, PyTorch can use the `mps` backend for faster training/inference.
+- The agent only triggers `C` and `Space` when a movement key is active (to match game rules).
 - The AI is only as good as the data. Record more varied play for better results.
 
 **Build Windows .exe**
