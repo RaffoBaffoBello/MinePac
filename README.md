@@ -153,6 +153,66 @@ pip install matplotlib
 python plot_rl_progress.py
 ```
 
+**AlphaZero-Style Self-Play (Experimental)**
+This uses the headless game engine in `pac_env.py` (same mechanics as the game) and runs MCTS + a policy/value CNN.
+
+1) Generate self-play data:
+```bash
+python az_selfplay.py --episodes 5
+```
+Self-play data is saved under:
+```
+data/az/
+```
+
+2) Train the policy/value network:
+```bash
+python az_train.py --epochs 10
+```
+This saves:
+```
+az_model.pt
+```
+
+3) Watch the AlphaZero model play (Pygame window):
+```bash
+python az_play.py
+```
+Optional (slower, stronger):
+```bash
+python az_play.py --mcts-sims 64
+```
+
+**Evaluation Gating**
+`az_train.py` now saves a candidate model and evaluates it vs the current best.
+If it wins enough, it promotes the candidate to `az_model.pt`.
+
+Notes:
+- `az_selfplay.py` uses MCTS for each move (default 64 sims).
+- The action space is 20 actions: 5 movement directions × 4 action types.
+- You can tune `--sims`, `--temp`, `--dt-ms`, and `--max-steps` for speed vs. quality.
+
+**AlphaZero Loop (Watch + Learn)**
+Run a live loop that:
+1) generates self‑play data
+2) trains + gates the model
+3) opens a Pygame window and plays the current best model
+
+```bash
+python az_loop.py
+```
+Key options:
+- `--cycles 0` (default) runs forever
+- `--selfplay-episodes`, `--train-epochs`
+- `--watch-mcts-sims` to use MCTS during watching (slower but stronger)
+
+**Train While Watching (Background)**
+To keep the window open while training runs in the background:
+```bash
+python az_loop.py --train-while-watching --watch-episodes 0
+```
+The watcher auto‑reloads the latest model every few seconds.
+
 **Notes**
 - If the agent cannot control the game on macOS, enable Accessibility for your terminal or IDE.
 - On Apple Silicon, PyTorch can use the `mps` backend for faster training/inference.

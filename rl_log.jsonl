@@ -1,0 +1,9 @@
+{"time": 1770746876.767262, "steps": 1300, "eps": 0.883, "avg_reward_200": -3.95, "last_score": 180, "last_lives": 1}
+{"time": 1770747176.851754, "steps": 2291, "eps": 0.79381, "avg_reward_200": -4.25, "last_score": 100, "last_lives": 1}
+{"time": 1770747477.156613, "steps": 3221, "eps": 0.71011, "avg_reward_200": -3.85, "last_score": 170, "last_lives": 1}
+{"time": 1770747777.719807, "steps": 4154, "eps": 0.6261399999999999, "avg_reward_200": -0.25, "last_score": 0, "last_lives": 3}
+{"time": 1770748078.1094809, "steps": 5141, "eps": 0.53731, "avg_reward_200": -1.55, "last_score": 120, "last_lives": 2}
+{"time": 1770748378.25675, "steps": 6161, "eps": 0.44550999999999996, "avg_reward_200": -6.15, "last_score": 110, "last_lives": 2}
+{"time": 1770748678.575883, "steps": 7182, "eps": 0.35362000000000005, "avg_reward_200": -2.8, "last_score": 80, "last_lives": 3}
+{"time": 1770748978.840377, "steps": 8222, "eps": 0.2600199999999999, "avg_reward_200": 2.2, "last_score": 150, "last_lives": 3}
+{"time": 1770749278.948265, "steps": 9314, "eps": 0.16174, "avg_reward_200": -1.5, "last_score": 320, "last_lives": 1}
