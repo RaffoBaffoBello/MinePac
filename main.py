@@ -911,6 +911,14 @@ def main():
             player.dir = (0, 0)
 
         player.update(walls, desired_dir, break_blocks, dig_timers, revealed, reveal_counts, block_required)
+        # Safety: if a wall ends up on the player tile, clear it to avoid soft-lock.
+        px = (player.x + TILE // 2) // TILE
+        py = (player.y + TILE // 2) // TILE
+        if (px, py) in walls:
+            walls.remove((px, py))
+            if (px, py) in dig_timers:
+                del dig_timers[(px, py)]
+            register_clear(px, py)
         hit_ghost = None
         player_rect = player.rect()
         for ghost in ghosts:

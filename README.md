@@ -97,7 +97,8 @@ Click the game window to focus it before running.
 **4) Self-Training Loop (Optional)**
 This project includes a self‑improving loop:
 - the agent plays the game
-- when the score increases, it saves the recent frames + actions
+- when the score increases quickly, it saves the recent frames + actions (best moves)
+- when Pac‑Man dies, those recent moves are saved as “bad samples” and penalized during training
 - it periodically fine‑tunes the model and resumes play
 
 Run it like this (default: retrain after ~2000 new samples):
@@ -127,9 +128,29 @@ To start fresh, delete:
 - `data/*.npz`
 - `self_train_log.jsonl`
 
-You can also force a random-start session:
+To start from random weights, edit `PAC_START_RANDOM` at the top of `self_train_agent.py`.
+When set to `1`, it clears existing model/data/logs before starting. Set it to `0` to keep existing data.
+
+**Reinforcement Learning (Experimental)**
+You can also train with reinforcement learning directly from the game screen:
 ```bash
-PAC_START_RANDOM=1 python self_train_agent.py
+python rl_train.py
+```
+This uses a DQN agent with epsilon‑greedy exploration and bombs enabled.
+It reads rewards from `score.json`, so keep the game running and focused.
+
+To run the trained RL policy (no learning):
+```bash
+python rl_agent.py
+```
+
+**RL Checkpoints + Metrics**
+- Checkpoints are saved every 5 minutes to `rl_checkpoint.pt` and auto‑loaded on restart.
+- Metrics are logged to `rl_log.jsonl`.
+Plot progress:
+```bash
+pip install matplotlib
+python plot_rl_progress.py
 ```
 
 **Notes**

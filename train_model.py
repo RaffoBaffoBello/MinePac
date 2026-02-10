@@ -1,6 +1,7 @@
 import os
 import json
 import random
+import sys
 
 import numpy as np
 import torch
@@ -13,7 +14,7 @@ MODEL_PATH = os.path.join(os.path.dirname(__file__), "model.pth")
 META_PATH = os.path.join(os.path.dirname(__file__), "model_meta.json")
 
 FRAME_SIZE = (96, 96)
-STACK_SIZE = 4
+STACK_SIZE = 64
 MOVE_LABELS = ["none", "up", "down", "left", "right"]
 ACTION_LABELS = ["none", "c", "v", "space"]
 
@@ -23,6 +24,7 @@ LR = 1e-3
 VAL_SPLIT = 0.1
 SEED = 42
 FINE_TUNE = os.getenv("PAC_FINE_TUNE", "1") == "1"
+BAD_PENALTY_WEIGHT = 0.03
 
 
 def set_seed(seed):
@@ -97,24 +99,44 @@ class LightPolicyNet(nn.Module):
         return move, action
 
 
-def load_npz_files(data_dir):
-    frames = []
-    moves = []
-    actions = []
-    for name in sorted(os.listdir(data_dir)):
-        if not name.endswith(".npz"):
-            continue
-        path = os.path.join(data_dir, name)
+def load_npz_files(data_dir, paths=None):
+    good_frames = []
+    good_moves = []
+    good_actions = []
+    bad_frames = []
+    bad_moves = []
+    bad_actions = []
+    names = []
+    if paths:
+        for path in paths:
+            if path.endswith(".npz") and os.path.exists(path):
+                names.append(path)
+    else:
+        for name in sorted(os.listdir(data_dir)):
+            if name.endswith(".npz"):
+                names.append(os.path.join(data_dir, name))
+    for path in names:
+        name = os.path.basename(path)
         data = np.load(path)
-        frames.append(data["frames"])
-        moves.append(data["move"])
-        actions.append(data["action"])
-    if not frames:
-        return None
-    frames = np.concatenate(frames, axis=0)
-    moves = np.concatenate(moves, axis=0)
-    actions = np.concatenate(actions, axis=0)
-    return frames, moves, actions
+        if name.startswith("bad_"):
+            bad_frames.append(data["frames"])
+            bad_moves.append(data["move"])
+            bad_actions.append(data["action"])
+        else:
+            good_frames.append(data["frames"])
+            good_moves.append(data["move"])
+            good_actions.append(data["action"])
+    if not good_frames:
+        return None, None
+    frames = np.concatenate(good_frames, axis=0)
+    moves = np.concatenate(good_moves, axis=0)
+    actions = np.concatenate(good_actions, axis=0)
+    if bad_frames:
+        bad_f = np.concatenate(bad_frames, axis=0)
+        bad_m = np.concatenate(bad_moves, axis=0)
+        bad_a = np.concatenate(bad_actions, axis=0)
+        return (frames, moves, actions), (bad_f, bad_m, bad_a)
+    return (frames, moves, actions), None
 
 
 def main():
@@ -122,10 +144,14 @@ def main():
     if not os.path.isdir(DATA_DIR):
         raise SystemExit("No data directory found. Run collect_data.py first.")
 
-    loaded = load_npz_files(DATA_DIR)
-    if loaded is None:
+    extra_paths = [p for p in sys.argv[1:] if p.endswith(".npz")]
+    loaded_good, loaded_bad = load_npz_files(DATA_DIR, extra_paths or None)
+    if loaded_good is None:
         raise SystemExit("No .npz files found in data directory.")
-    frames, moves, actions = loaded
+    frames, moves, actions = loaded_good
+    bad_frames = bad_moves = bad_actions = None
+    if loaded_bad:
+        bad_frames, bad_moves, bad_actions = loaded_bad
 
     if frames.shape[1:3] != FRAME_SIZE:
         print(f"Warning: frame size mismatch. Expected {FRAME_SIZE}, got {frames.shape[1:3]}.")
@@ -134,6 +160,8 @@ def main():
     action_counts = np.bincount(actions, minlength=len(ACTION_LABELS)).astype(np.float32)
     print("Move counts:", {MOVE_LABELS[i]: int(c) for i, c in enumerate(move_counts)})
     print("Action counts:", {ACTION_LABELS[i]: int(c) for i, c in enumerate(action_counts)})
+    if bad_frames is not None:
+        print(f"Bad samples: {len(bad_frames)}")
     move_weights = np.zeros_like(move_counts)
     action_weights = np.zeros_like(action_counts)
     total_moves = move_counts.sum()
@@ -148,6 +176,9 @@ def main():
     print("Action weights:", {ACTION_LABELS[i]: float(f'{w:.3f}') for i, w in enumerate(action_weights)})
 
     dataset = FrameDataset(frames, moves, actions, STACK_SIZE)
+    bad_dataset = None
+    if bad_frames is not None:
+        bad_dataset = FrameDataset(bad_frames, bad_moves, bad_actions, STACK_SIZE)
     val_len = int(len(dataset) * VAL_SPLIT)
     train_len = len(dataset) - val_len
     train_set, val_set = random_split(dataset, [train_len, val_len])
@@ -165,6 +196,12 @@ def main():
     sampler = WeightedRandomSampler(action_sample_weights, num_samples=len(train_indices), replacement=True)
     train_loader = DataLoader(train_set, batch_size=BATCH_SIZE, sampler=sampler, drop_last=True)
     val_loader = DataLoader(val_set, batch_size=BATCH_SIZE, shuffle=False)
+    bad_loader = None
+    bad_iter = None
+    if bad_dataset is not None and len(bad_dataset) > 0:
+        bad_batch = min(BATCH_SIZE, len(bad_dataset))
+        bad_loader = DataLoader(bad_dataset, batch_size=bad_batch, shuffle=True, drop_last=False)
+        bad_iter = iter(bad_loader)
 
     if torch.backends.mps.is_available():
         device = torch.device("mps")
@@ -191,6 +228,23 @@ def main():
             opt.zero_grad()
             move_logits, action_logits = model(frames_batch)
             loss = loss_fn_move(move_logits, move_batch) + loss_fn_action(action_logits, action_batch)
+            if bad_loader is not None:
+                try:
+                    bad_frames_batch, bad_move_batch, bad_action_batch = next(bad_iter)
+                except StopIteration:
+                    bad_iter = iter(bad_loader)
+                    bad_frames_batch, bad_move_batch, bad_action_batch = next(bad_iter)
+                bad_frames_batch = bad_frames_batch.to(device)
+                bad_move_batch = bad_move_batch.to(device)
+                bad_action_batch = bad_action_batch.to(device)
+                bad_move_logits, bad_action_logits = model(bad_frames_batch)
+                bad_move_probs = torch.softmax(bad_move_logits, dim=1)
+                bad_action_probs = torch.softmax(bad_action_logits, dim=1)
+                bad_move_p = bad_move_probs.gather(1, bad_move_batch.unsqueeze(1)).squeeze(1)
+                bad_action_p = bad_action_probs.gather(1, bad_action_batch.unsqueeze(1)).squeeze(1)
+                bad_loss_move = (-torch.log(1.0 - bad_move_p + 1e-6)).mean()
+                bad_loss_action = (-torch.log(1.0 - bad_action_p + 1e-6)).mean()
+                loss = loss + BAD_PENALTY_WEIGHT * (bad_loss_move + bad_loss_action)
             loss.backward()
             opt.step()
             total_loss += loss.item()
@@ -250,6 +304,7 @@ def main():
         "stack_size": STACK_SIZE,
         "move_labels": MOVE_LABELS,
         "action_labels": ACTION_LABELS,
+        "bad_penalty_weight": BAD_PENALTY_WEIGHT,
     }
     with open(META_PATH, "w", encoding="utf-8") as f:
         json.dump(meta, f, indent=2)
