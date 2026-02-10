@@ -1,11 +1,12 @@
 {
-  "cyan_effect_ms": 5000,
-  "bomb_timer_ms": 1000,
+  "tile_size": 27,
+  "cyan_effect_ms": 40000,
+  "bomb_timer_ms": 4000,
   "bomb_size": 6,
   "reveal_block": 10,
   "ghosts_first_level": 4,
   "ghosts_per_level": 2,
   "ghost_speed_multiplier": 1.03,
-  "max_bombs_per_life": 10,
+  "max_bombs_per_life": 10000,
   "points_per_level": 1000
 }

@@ -5,9 +5,6 @@ import random
 import math
 from collections import deque
 import pygame
-
-
-TILE = 24
 BOMB_COLOR = (255, 200, 60)
 FPS = 60
 
@@ -36,6 +33,7 @@ BASE_GHOST_SPEED = 2
 MAX_GHOST_SPEED = 6
 
 DEFAULT_CONFIG = {
+    "tile_size": 24,
     "cyan_effect_ms": 40000,
     "bomb_timer_ms": 4000,
     "bomb_size": 6,
@@ -68,6 +66,7 @@ def load_config():
 
 
 CONFIG = load_config()
+TILE = int(CONFIG["tile_size"])
 BOMB_TIMER_MS = int(CONFIG["bomb_timer_ms"])
 REVEAL_BLOCK = int(CONFIG["reveal_block"])
 BOMB_SIZE = int(CONFIG["bomb_size"])
@@ -706,6 +705,7 @@ def main():
         return rev, rc
 
     block_required = build_block_requirements()
+    total_reveal_blocks = len(block_required)
 
     level = 1
     wall_color = wall_color_for_level(level)
@@ -749,6 +749,7 @@ def main():
         reveal_error = "Reveal image missing (assets/reveal.jpg)"
     game_over = False
     game_over_choice = None
+    game_won = False
 
     running = True
     while running:
@@ -766,6 +767,8 @@ def main():
                         game_over_choice = "yes"
                     elif event.key == pygame.K_n:
                         game_over_choice = "no"
+                elif game_won:
+                    pass
                 else:
                     if event.key == pygame.K_SPACE:
                         dig_requested = True
@@ -797,6 +800,7 @@ def main():
                 bombs = []
                 bomb_positions = set()
                 bombs_left = MAX_BOMBS_PER_LIFE
+                game_won = False
                 game_over = False
                 game_over_choice = None
             elif game_over_choice == "no":
@@ -826,8 +830,16 @@ def main():
                 bombs = []
                 bomb_positions = set()
                 bombs_left = MAX_BOMBS_PER_LIFE
+                game_won = False
                 game_over = False
                 game_over_choice = None
+            continue
+        if game_won:
+            draw(screen, walls, dots, power, cyan, player, ghosts, score, lives, bombs_left, record_score, record_level, dig_timers, wall_color, level, reveal_image, revealed, reveal_error, bombs, break_blocks)
+            font = pygame.font.SysFont("Arial", 36)
+            msg = font.render("YOU WON!", True, WHITE)
+            screen.blit(msg, (WIDTH // 2 - msg.get_width() // 2, HEIGHT // 2 - 20))
+            pygame.display.flip()
             continue
 
         desired_dir = get_input_dir()
@@ -997,13 +1009,13 @@ def main():
             bombs = []
             bomb_positions = set()
             bombs_left = MAX_BOMBS_PER_LIFE
+            game_won = False
             if level > record_level:
                 record_level = level
                 save_record(record_score, record_level)
             continue
-
-        if not dots and not power:
-            running = False
+        if not game_won and len(revealed) >= total_reveal_blocks:
+            game_won = True
 
         draw(screen, walls, dots, power, cyan, player, ghosts, score, lives, bombs_left, record_score, record_level, dig_timers, wall_color, level, reveal_image, revealed, reveal_error, bombs, break_blocks)
         pygame.display.flip()
