@@ -798,9 +798,17 @@ def main():
 
         if game_over:
             draw(screen, walls, dots, power, cyan, player, ghosts, score, lives, bombs_left, record_score, record_level, dig_timers, wall_color, level, reveal_image, revealed, reveal_error, bombs, break_blocks)
-            font = pygame.font.SysFont("Arial", 28)
-            msg = font.render("GAME OVER - Continue? (Y/N)", True, WHITE)
-            screen.blit(msg, (WIDTH // 2 - msg.get_width() // 2, HEIGHT // 2 - 20))
+            box_w = int(WIDTH * 0.8)
+            box_h = int(HEIGHT * 0.22)
+            box_x = (WIDTH - box_w) // 2
+            box_y = (HEIGHT - box_h) // 2
+            pygame.draw.rect(screen, WHITE, pygame.Rect(box_x, box_y, box_w, box_h), border_radius=8)
+            title_font = pygame.font.SysFont("Arial", 54, bold=True)
+            sub_font = pygame.font.SysFont("Arial", 26)
+            title = title_font.render("GAME OVER", True, BLACK)
+            subtitle = sub_font.render("Press N to Restart or Y to Continue", True, BLACK)
+            screen.blit(title, (WIDTH // 2 - title.get_width() // 2, box_y + 12))
+            screen.blit(subtitle, (WIDTH // 2 - subtitle.get_width() // 2, box_y + 70))
             pygame.display.flip()
             if game_over_choice == "yes":
                 lives = 3

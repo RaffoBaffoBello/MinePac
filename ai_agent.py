@@ -22,6 +22,8 @@ RANDOM_SEED = None
 
 FRAME_SIZE = (96, 96)
 STACK_SIZE = 4
+GAME_OVER_HOLD_SEC = 0.5
+GAME_OVER_COOLDOWN_SEC = 2.0
 MODEL_PATH = os.path.join(os.path.dirname(__file__), "model.pth")
 
 MOVE_LABELS = ["none", "up", "down", "left", "right"]
@@ -41,6 +43,7 @@ KEY_MAP = {
     "c": "c",
     "v": "v",
     "space": Key.space,
+    "n": "n",
 }
 
 
@@ -133,6 +136,18 @@ def build_stack(frames, stack_size):
     return np.stack(stack, axis=0)
 
 
+def detect_game_over(gray_frame):
+    h, w = gray_frame.shape
+    x0, x1 = int(w * 0.2), int(w * 0.8)
+    y0, y1 = int(h * 0.38), int(h * 0.62)
+    region = gray_frame[y0:y1, x0:x1]
+    if region.size == 0:
+        return False
+    bright_ratio = (region > 0.9).mean()
+    mean_val = float(region.mean())
+    return bright_ratio > 0.2 and mean_val > 0.35
+
+
 def decide_action(stack, rng, model=None, device="cpu"):
     if model is None:
         move_label = rng.choice(MOVE_LABELS)
@@ -170,6 +185,9 @@ def main():
     current_move = None
     last_debug = 0.0
     frame_history = deque(maxlen=STACK_SIZE)
+    game_over_accum = 0.0
+    last_game_over_check = time.time()
+    last_game_over_press = 0.0
 
     if os.path.exists(MODEL_PATH):
         if torch.backends.mps.is_available():
@@ -204,9 +222,25 @@ def main():
 
             x, y, w, h = bounds
             frame = sct.grab({"left": x, "top": y, "width": w, "height": h})
-            frame_history.append(preprocess(frame))
+            gray = preprocess(frame)
+            frame_history.append(gray)
 
             now = time.time()
+            delta = now - last_game_over_check
+            last_game_over_check = now
+            if detect_game_over(gray):
+                game_over_accum += delta
+            else:
+                game_over_accum = 0.0
+
+            if game_over_accum >= GAME_OVER_HOLD_SEC:
+                if now - last_game_over_press >= GAME_OVER_COOLDOWN_SEC:
+                    if current_move and current_move in KEY_MAP:
+                        keyboard.release(KEY_MAP[current_move])
+                        current_move = None
+                    tap_key(keyboard, KEY_MAP["n"], KEY_HOLD_TIME)
+                    last_game_over_press = now
+                continue
             if now - last_cmd_time >= COMMAND_INTERVAL:
                 stack = build_stack(frame_history, STACK_SIZE)
                 if stack is None:
