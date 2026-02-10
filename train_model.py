@@ -22,6 +22,7 @@ EPOCHS = 25
 LR = 1e-3
 VAL_SPLIT = 0.1
 SEED = 42
+FINE_TUNE = os.getenv("PAC_FINE_TUNE", "1") == "1"
 
 
 def set_seed(seed):
@@ -172,6 +173,10 @@ def main():
     else:
         device = torch.device("cpu")
     model = LightPolicyNet(STACK_SIZE, len(MOVE_LABELS), len(ACTION_LABELS)).to(device)
+    if FINE_TUNE and os.path.exists(MODEL_PATH):
+        state = torch.load(MODEL_PATH, map_location=device)
+        model.load_state_dict(state)
+        print("Loaded existing model for fine-tuning.")
     opt = torch.optim.Adam(model.parameters(), lr=LR)
     loss_fn_move = nn.CrossEntropyLoss(weight=torch.tensor(move_weights, dtype=torch.float32, device=device))
     loss_fn_action = nn.CrossEntropyLoss(weight=torch.tensor(action_weights, dtype=torch.float32, device=device))

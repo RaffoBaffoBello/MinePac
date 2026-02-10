@@ -94,6 +94,18 @@ python ai_agent.py
 The agent reads the game window image and presses keys globally.
 Click the game window to focus it before running.
 
+**4) Self-Training Loop (Optional)**
+This project includes a self‑improving loop:
+- the agent plays the game
+- when the score increases, it saves the recent frames + actions
+- it periodically fine‑tunes the model and resumes play
+
+Run it like this (default: retrain after ~2000 new samples):
+```bash
+python self_train_agent.py
+```
+This uses `score.json` written by the game to detect score changes.
+
 **Notes**
 - If the agent cannot control the game on macOS, enable Accessibility for your terminal or IDE.
 - On Apple Silicon, PyTorch can use the `mps` backend for faster training/inference.

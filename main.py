@@ -3,6 +3,7 @@ import os
 import json
 import random
 import math
+import time
 from collections import deque
 import pygame
 BOMB_COLOR = (255, 200, 60)
@@ -47,6 +48,7 @@ DEFAULT_CONFIG = {
 
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.json")
 RECORD_PATH = os.path.join(os.path.dirname(__file__), "record.json")
+SCORE_PATH = os.path.join(os.path.dirname(__file__), "score.json")
 
 
 def load_config():
@@ -96,6 +98,17 @@ def load_record():
 def save_record(score, level):
     with open(RECORD_PATH, "w", encoding="utf-8") as f:
         json.dump({"score": int(score), "level": int(level)}, f)
+
+
+def save_score_state(score, lives, level):
+    try:
+        with open(SCORE_PATH, "w", encoding="utf-8") as f:
+            json.dump(
+                {"score": int(score), "lives": int(lives), "level": int(level), "updated_at": time.time()},
+                f,
+            )
+    except OSError:
+        pass
 
 BASE_MAZE = [
     "###########################################",
@@ -734,6 +747,8 @@ def main():
     bombs_left = MAX_BOMBS_PER_LIFE
     revealed, reveal_counts = init_reveal_state()
     record_score, record_level = load_record()
+    last_score_write = 0.0
+    last_score_value = None
     reveal_image = None
     reveal_error = ""
     assets_dir = os.path.join(os.path.dirname(__file__), "assets")
@@ -974,6 +989,12 @@ def main():
         if score > record_score:
             record_score = score
             save_record(record_score, record_level)
+
+        now_time = time.time()
+        if score != last_score_value or now_time - last_score_write > 0.5:
+            save_score_state(score, lives, level)
+            last_score_value = score
+            last_score_write = now_time
 
         if power_timer > 0:
             power_timer -= dt
