@@ -515,7 +515,7 @@ def draw(screen, walls, dots, power, cyan, player, ghosts, score, lives, bombs_l
         warn = font.render(reveal_error, True, WHITE)
         screen.blit(warn, (10, 2))
     else:
-        help_text = font.render("C = place blocks  |  Space = erase blocks  |  V = drop bombs", True, WHITE)
+        help_text = font.render("C = place blocks  |  Space = erase blocks  |  V = drop bombs  |  P = pause", True, WHITE)
         screen.blit(help_text, (10, 2))
         record_text = font.render(f"Record: {record_score:06d} - Level: {record_level}", True, WHITE)
         screen.blit(record_text, (10 + help_text.get_width() + 16, 2))
@@ -750,6 +750,7 @@ def main():
     game_over = False
     game_over_choice = None
     game_won = False
+    paused = False
 
     running = True
     while running:
@@ -770,18 +771,27 @@ def main():
                 elif game_won:
                     pass
                 else:
-                    if event.key == pygame.K_SPACE:
-                        dig_requested = True
-                        dig_requested_time = 200
-                    elif event.key == pygame.K_c:
-                        place_requested_time = 200
-                    elif event.key == pygame.K_v:
-                        bx = (player.x + TILE // 2) // TILE
-                        by = (player.y + TILE // 2) // TILE
-                        if bombs_left > 0 and (bx, by) not in bomb_positions:
-                            bombs.append({"x": bx, "y": by, "timer": BOMB_TIMER_MS})
-                            bomb_positions.add((bx, by))
-                            bombs_left -= 1
+                    if event.key == pygame.K_p:
+                        paused = not paused
+                        if paused:
+                            for k in arrow_state:
+                                arrow_state[k] = False
+                            dig_requested = False
+                            dig_requested_time = 0
+                            place_requested_time = 0
+                    elif not paused:
+                        if event.key == pygame.K_SPACE:
+                            dig_requested = True
+                            dig_requested_time = 200
+                        elif event.key == pygame.K_c:
+                            place_requested_time = 200
+                        elif event.key == pygame.K_v:
+                            bx = (player.x + TILE // 2) // TILE
+                            by = (player.y + TILE // 2) // TILE
+                            if bombs_left > 0 and (bx, by) not in bomb_positions:
+                                bombs.append({"x": bx, "y": by, "timer": BOMB_TIMER_MS})
+                                bomb_positions.add((bx, by))
+                                bombs_left -= 1
             elif event.type == pygame.KEYUP:
                 if event.key in arrow_state:
                     arrow_state[event.key] = False
@@ -800,6 +810,7 @@ def main():
                 bombs = []
                 bomb_positions = set()
                 bombs_left = MAX_BOMBS_PER_LIFE
+                paused = False
                 game_won = False
                 game_over = False
                 game_over_choice = None
@@ -830,6 +841,7 @@ def main():
                 bombs = []
                 bomb_positions = set()
                 bombs_left = MAX_BOMBS_PER_LIFE
+                paused = False
                 game_won = False
                 game_over = False
                 game_over_choice = None
@@ -838,6 +850,13 @@ def main():
             draw(screen, walls, dots, power, cyan, player, ghosts, score, lives, bombs_left, record_score, record_level, dig_timers, wall_color, level, reveal_image, revealed, reveal_error, bombs, break_blocks)
             font = pygame.font.SysFont("Arial", 36)
             msg = font.render("YOU WON!", True, WHITE)
+            screen.blit(msg, (WIDTH // 2 - msg.get_width() // 2, HEIGHT // 2 - 20))
+            pygame.display.flip()
+            continue
+        if paused:
+            draw(screen, walls, dots, power, cyan, player, ghosts, score, lives, bombs_left, record_score, record_level, dig_timers, wall_color, level, reveal_image, revealed, reveal_error, bombs, break_blocks)
+            font = pygame.font.SysFont("Arial", 28)
+            msg = font.render("PAUSED - Press P to resume", True, WHITE)
             screen.blit(msg, (WIDTH // 2 - msg.get_width() // 2, HEIGHT // 2 - 20))
             pygame.display.flip()
             continue
