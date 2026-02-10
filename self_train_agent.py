@@ -39,6 +39,8 @@ GAME_OVER_COOLDOWN_SEC = 2.0
 DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 MODEL_PATH = os.path.join(os.path.dirname(__file__), "model.pth")
 SCORE_PATH = os.path.join(os.path.dirname(__file__), "score.json")
+LOG_PATH = os.path.join(os.path.dirname(__file__), "self_train_log.jsonl")
+START_RANDOM = os.getenv("v", "0") == "1"
 
 MOVE_LABELS = ["none", "up", "down", "left", "right"]
 ACTION_LABELS = ["none", "c", "v", "space"]
@@ -189,6 +191,9 @@ def tap_key(controller, key, hold_time):
 def load_model():
     model = None
     device = "cpu"
+    if START_RANDOM:
+        print("Starting with random policy (ignoring existing model).")
+        return None, device
     if os.path.exists(MODEL_PATH):
         if torch.backends.mps.is_available():
             device = "mps"
@@ -211,6 +216,22 @@ def read_score(path):
             return int(data.get("score", 0))
     except (OSError, json.JSONDecodeError, ValueError):
         return None
+
+
+def append_log(version, max_score, samples, note=None):
+    entry = {
+        "time": time.time(),
+        "version": int(version),
+        "max_score": int(max_score),
+        "samples_since_train": int(samples),
+    }
+    if note:
+        entry["note"] = note
+    try:
+        with open(LOG_PATH, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry) + "\n")
+    except OSError:
+        pass
 
 
 def main():
@@ -238,12 +259,14 @@ def main():
     last_cmd_time = 0.0
     last_event_time = 0.0
     last_score = read_score(SCORE_PATH)
+    max_score_this_version = last_score or 0
     frame_interval = 1.0 / max(1, CAPTURE_FPS)
 
     game_over_accum = 0.0
     last_game_over_check = time.time()
     last_game_over_press = 0.0
 
+    version_idx = 0
     print("Self-training agent starting.")
     print("Click the game window to focus it, then keep it in front.")
 
@@ -286,6 +309,7 @@ def main():
                 if score is not None:
                     if last_score is None:
                         last_score = score
+                        max_score_this_version = max(max_score_this_version, score)
                     if score > last_score and now - last_event_time >= EVENT_COOLDOWN_SEC:
                         delta_score = score - last_score
                         out_frames.extend(list(buffer_frames))
@@ -298,6 +322,8 @@ def main():
                         last_score = score
                     else:
                         last_score = score
+                    if score is not None:
+                        max_score_this_version = max(max_score_this_version, score)
 
                 stack = build_stack(frame_history, STACK_SIZE)
                 if stack is None:
@@ -364,10 +390,13 @@ def main():
                         out_actions.clear()
                         chunk_idx += 1
 
+                    append_log(version_idx, max_score_this_version, new_samples_since_train, note="before_retrain")
                     print(f"Retraining model after {new_samples_since_train} new samples...")
                     result = subprocess.run([os.sys.executable, "train_model.py"], cwd=os.path.dirname(__file__))
                     if result.returncode == 0:
                         model, device = load_model()
+                        version_idx += 1
+                        max_score_this_version = 0
                         print("Retrain complete. Resuming play.")
                         new_samples_since_train = 0
                     else:
@@ -379,6 +408,8 @@ def main():
                     time.sleep(sleep_for)
         except KeyboardInterrupt:
             pass
+
+    append_log(version_idx, max_score_this_version, new_samples_since_train, note="shutdown")
 
     if out_frames:
         out_path = os.path.join(DATA_DIR, f"self_{session}_{chunk_idx:03d}.npz")

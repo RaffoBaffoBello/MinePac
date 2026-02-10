@@ -106,6 +106,32 @@ python self_train_agent.py
 ```
 This uses `score.json` written by the game to detect score changes.
 
+**Self-Training Log**
+Each retrain cycle writes a line to:
+```
+self_train_log.jsonl
+```
+Each line records the version and the max score reached by that version, so you can plot improvement later.
+
+**Plot Progress**
+```bash
+pip install matplotlib
+python plot_progress.py
+```
+This produces `self_train_progress.png`.
+
+**Start from Scratch**
+To start fresh, delete:
+- `model.pth`
+- `model_meta.json`
+- `data/*.npz`
+- `self_train_log.jsonl`
+
+You can also force a random-start session:
+```bash
+PAC_START_RANDOM=1 python self_train_agent.py
+```
+
 **Notes**
 - If the agent cannot control the game on macOS, enable Accessibility for your terminal or IDE.
 - On Apple Silicon, PyTorch can use the `mps` backend for faster training/inference.
