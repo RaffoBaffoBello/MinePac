@@ -1,0 +1,19 @@
+{
+  "frame_size": [
+    96,
+    96
+  ],
+  "move_labels": [
+    "none",
+    "up",
+    "down",
+    "left",
+    "right"
+  ],
+  "action_labels": [
+    "none",
+    "c",
+    "v",
+    "space"
+  ]
+}
