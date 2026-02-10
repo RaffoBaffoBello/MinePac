@@ -13,6 +13,7 @@ MODEL_PATH = os.path.join(os.path.dirname(__file__), "model.pth")
 META_PATH = os.path.join(os.path.dirname(__file__), "model_meta.json")
 
 FRAME_SIZE = (96, 96)
+STACK_SIZE = 4
 MOVE_LABELS = ["none", "up", "down", "left", "right"]
 ACTION_LABELS = ["none", "c", "v", "space"]
 
@@ -30,17 +31,24 @@ def set_seed(seed):
 
 
 class FrameDataset(Dataset):
-    def __init__(self, frames, moves, actions):
+    def __init__(self, frames, moves, actions, stack_size):
         self.frames = frames
         self.moves = moves
         self.actions = actions
+        self.stack_size = stack_size
 
     def __len__(self):
         return len(self.frames)
 
     def __getitem__(self, idx):
-        frame = self.frames[idx].astype(np.float32) / 255.0
-        frame = torch.from_numpy(frame).unsqueeze(0)
+        start = idx - self.stack_size + 1
+        if start < 0:
+            pad = [self.frames[0]] * (-start)
+            stack = pad + [self.frames[i] for i in range(0, idx + 1)]
+        else:
+            stack = [self.frames[i] for i in range(start, idx + 1)]
+        stack = np.stack(stack, axis=0).astype(np.float32) / 255.0
+        frame = torch.from_numpy(stack)
         move = int(self.moves[idx])
         action = int(self.actions[idx])
         return frame, move, action
@@ -62,10 +70,10 @@ class DepthwiseSeparableConv(nn.Module):
 
 
 class LightPolicyNet(nn.Module):
-    def __init__(self, move_classes, action_classes):
+    def __init__(self, in_channels, move_classes, action_classes):
         super().__init__()
         self.stem = nn.Sequential(
-            nn.Conv2d(1, 16, 3, stride=2, padding=1, bias=False),
+            nn.Conv2d(in_channels, 16, 3, stride=2, padding=1, bias=False),
             nn.BatchNorm2d(16),
             nn.ReLU(inplace=True),
         )
@@ -138,7 +146,7 @@ def main():
     print("Move weights:", {MOVE_LABELS[i]: float(f"{w:.3f}") for i, w in enumerate(move_weights)})
     print("Action weights:", {ACTION_LABELS[i]: float(f'{w:.3f}') for i, w in enumerate(action_weights)})
 
-    dataset = FrameDataset(frames, moves, actions)
+    dataset = FrameDataset(frames, moves, actions, STACK_SIZE)
     val_len = int(len(dataset) * VAL_SPLIT)
     train_len = len(dataset) - val_len
     train_set, val_set = random_split(dataset, [train_len, val_len])
@@ -158,7 +166,7 @@ def main():
     val_loader = DataLoader(val_set, batch_size=BATCH_SIZE, shuffle=False)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = LightPolicyNet(len(MOVE_LABELS), len(ACTION_LABELS)).to(device)
+    model = LightPolicyNet(STACK_SIZE, len(MOVE_LABELS), len(ACTION_LABELS)).to(device)
     opt = torch.optim.Adam(model.parameters(), lr=LR)
     loss_fn_move = nn.CrossEntropyLoss(weight=torch.tensor(move_weights, dtype=torch.float32, device=device))
     loss_fn_action = nn.CrossEntropyLoss(weight=torch.tensor(action_weights, dtype=torch.float32, device=device))
@@ -229,6 +237,7 @@ def main():
     torch.save(model.state_dict(), MODEL_PATH)
     meta = {
         "frame_size": list(FRAME_SIZE),
+        "stack_size": STACK_SIZE,
         "move_labels": MOVE_LABELS,
         "action_labels": ACTION_LABELS,
     }

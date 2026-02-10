@@ -1,6 +1,7 @@
 import os
 import time
 import random
+from collections import deque
 
 import mss
 import numpy as np
@@ -20,6 +21,7 @@ KEY_HOLD_TIME = 0.08
 RANDOM_SEED = None
 
 FRAME_SIZE = (96, 96)
+STACK_SIZE = 4
 MODEL_PATH = os.path.join(os.path.dirname(__file__), "model.pth")
 
 MOVE_LABELS = ["none", "up", "down", "left", "right"]
@@ -86,10 +88,10 @@ class DepthwiseSeparableConv(nn.Module):
 
 
 class LightPolicyNet(nn.Module):
-    def __init__(self, move_classes, action_classes):
+    def __init__(self, in_channels, move_classes, action_classes):
         super().__init__()
         self.stem = nn.Sequential(
-            nn.Conv2d(1, 16, 3, stride=2, padding=1, bias=False),
+            nn.Conv2d(in_channels, 16, 3, stride=2, padding=1, bias=False),
             nn.BatchNorm2d(16),
             nn.ReLU(inplace=True),
         )
@@ -117,18 +119,28 @@ def preprocess(frame_bgra):
     img = Image.fromarray(frame)
     img = img.convert("L")
     img = img.resize(FRAME_SIZE, Image.BILINEAR)
-    arr = np.array(img, dtype=np.float32) / 255.0
-    return torch.from_numpy(arr).unsqueeze(0).unsqueeze(0)
+    return np.array(img, dtype=np.float32) / 255.0
 
 
-def decide_action(frame, rng, model=None, device="cpu"):
+def build_stack(frames, stack_size):
+    if not frames:
+        return None
+    if len(frames) < stack_size:
+        pad = [frames[0]] * (stack_size - len(frames))
+        stack = pad + list(frames)
+    else:
+        stack = list(frames)[-stack_size:]
+    return np.stack(stack, axis=0)
+
+
+def decide_action(stack, rng, model=None, device="cpu"):
     if model is None:
         move_label = rng.choice(MOVE_LABELS)
         action_label = rng.choice(ACTION_LABELS + ["none", "none", "none"])
         return move_label, action_label, 1.0, 1.0
 
     with torch.no_grad():
-        inp = preprocess(frame).to(device)
+        inp = torch.from_numpy(stack).unsqueeze(0).to(device)
         move_logits, action_logits = model(inp)
         move_probs = torch.softmax(move_logits, dim=1).squeeze(0)
         action_probs = torch.softmax(action_logits, dim=1).squeeze(0)
@@ -157,10 +169,11 @@ def main():
     device = "cpu"
     current_move = None
     last_debug = 0.0
+    frame_history = deque(maxlen=STACK_SIZE)
 
     if os.path.exists(MODEL_PATH):
         device = "cuda" if torch.cuda.is_available() else "cpu"
-        model = LightPolicyNet(len(MOVE_LABELS), len(ACTION_LABELS)).to(device)
+        model = LightPolicyNet(STACK_SIZE, len(MOVE_LABELS), len(ACTION_LABELS)).to(device)
         state = torch.load(MODEL_PATH, map_location=device)
         model.load_state_dict(state)
         model.eval()
@@ -186,10 +199,14 @@ def main():
 
             x, y, w, h = bounds
             frame = sct.grab({"left": x, "top": y, "width": w, "height": h})
+            frame_history.append(preprocess(frame))
 
             now = time.time()
             if now - last_cmd_time >= COMMAND_INTERVAL:
-                move_label, action_label, move_conf, action_conf = decide_action(frame, rng, model, device)
+                stack = build_stack(frame_history, STACK_SIZE)
+                if stack is None:
+                    continue
+                move_label, action_label, move_conf, action_conf = decide_action(stack, rng, model, device)
 
                 if DEBUG and now - last_debug >= DEBUG_INTERVAL_SEC:
                     print(f"move={move_label}({move_conf:.2f}) action={action_label}({action_conf:.2f})")

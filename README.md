@@ -16,6 +16,7 @@ A Pac‑Man‑inspired maze game with building, bombs, destructible walls, and a
 | Place block | `C` |
 | Erase block | `Space` |
 | Drop bomb | `V` |
+| Pause | `P` |
 | Quit | `Esc` |
 
 **Requirements**
@@ -41,6 +42,7 @@ As you clear tiles, the image will appear in 10×10 tile blocks (configurable).
 
 **Configuration**
 Edit `config.json` to tune gameplay:
+- `tile_size`: size of each grid tile in pixels
 - `cyan_effect_ms`: duration of cyan power in ms
 - `bomb_timer_ms`: bomb fuse time in ms
 - `bomb_size`: bomb blast size (tiles)
@@ -57,6 +59,45 @@ The highest score and level are stored in:
 record.json
 ```
 
+**Imitation Learning (AI Agent)**
+The project includes a simple imitation learning pipeline that learns from screen input and your keyboard actions.
+
+**AI Requirements**
+- `mss` (screen capture)
+- `pynput` (keyboard input/output)
+- `pyobjc-framework-Quartz` (macOS window capture)
+- `pillow` (image preprocessing)
+- `torch` (training/inference)
+
+**Install AI Dependencies**
+```bash
+pip install mss pynput pyobjc-framework-Quartz pillow torch
+```
+
+**1) Collect Data**
+```bash
+python collect_data.py
+```
+This records frames and your key presses into `.npz` files under `data/`.
+You can run it multiple times; training will merge all `.npz` files automatically.
+
+**2) Train**
+```bash
+python train_model.py
+```
+This produces `model.pth` and `model_meta.json`.
+
+**3) Run the Agent**
+```bash
+python ai_agent.py
+```
+The agent reads the game window image and presses keys globally.
+Click the game window to focus it before running.
+
+**Notes**
+- If the agent cannot control the game on macOS, enable Accessibility for your terminal or IDE.
+- The AI is only as good as the data. Record more varied play for better results.
+
 **Build Windows .exe**
 Build on Windows using PyInstaller:
 ```bash
@@ -66,4 +107,4 @@ pyinstaller --onefile --windowed --add-data "assets;assets" main.py
 The executable will be in `dist/main.exe`.
 
 **License**
-Add your preferred license (MIT/Apache/etc.).
+MIT. See `LICENSE`.
