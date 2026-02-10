@@ -165,7 +165,12 @@ def main():
     train_loader = DataLoader(train_set, batch_size=BATCH_SIZE, sampler=sampler, drop_last=True)
     val_loader = DataLoader(val_set, batch_size=BATCH_SIZE, shuffle=False)
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if torch.backends.mps.is_available():
+        device = torch.device("mps")
+    elif torch.cuda.is_available():
+        device = torch.device("cuda")
+    else:
+        device = torch.device("cpu")
     model = LightPolicyNet(STACK_SIZE, len(MOVE_LABELS), len(ACTION_LABELS)).to(device)
     opt = torch.optim.Adam(model.parameters(), lr=LR)
     loss_fn_move = nn.CrossEntropyLoss(weight=torch.tensor(move_weights, dtype=torch.float32, device=device))

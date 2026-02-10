@@ -172,7 +172,12 @@ def main():
     frame_history = deque(maxlen=STACK_SIZE)
 
     if os.path.exists(MODEL_PATH):
-        device = "cuda" if torch.cuda.is_available() else "cpu"
+        if torch.backends.mps.is_available():
+            device = "mps"
+        elif torch.cuda.is_available():
+            device = "cuda"
+        else:
+            device = "cpu"
         model = LightPolicyNet(STACK_SIZE, len(MOVE_LABELS), len(ACTION_LABELS)).to(device)
         state = torch.load(MODEL_PATH, map_location=device)
         model.load_state_dict(state)
@@ -221,7 +226,10 @@ def main():
                     else:
                         current_move = None
 
-                if action_label != "none":
+                if action_label in ("c", "space"):
+                    if move_label != "none" or current_move is not None:
+                        tap_key(keyboard, KEY_MAP[action_label], KEY_HOLD_TIME)
+                elif action_label != "none":
                     tap_key(keyboard, KEY_MAP[action_label], KEY_HOLD_TIME)
 
                 last_cmd_time = now
