@@ -860,7 +860,7 @@ def main():
                             bx = (player.x + TILE // 2) // TILE
                             by = (player.y + TILE // 2) // TILE
                             if nukes_left > 0 and (bx, by) not in bomb_positions:
-                                bombs.append({"x": bx, "y": by, "timer": BOMB_TIMER_MS, "size": 30})
+                                bombs.append({"x": bx, "y": by, "timer": BOMB_TIMER_MS, "size": 10})
                                 bomb_positions.add((bx, by))
                                 nukes_left -= 1
             elif event.type == pygame.KEYUP:
