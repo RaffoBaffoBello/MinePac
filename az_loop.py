@@ -121,7 +121,22 @@ def draw_env(screen, env, reveal_image, status_line=None):
         screen.blit(text, (width // 2 - text.get_width() // 2, height // 2 - text.get_height() // 2))
 
 
-def run_selfplay(model, device, cfg, episodes, sims, c_puct, temp, dt_ms, max_steps, seed):
+def run_selfplay(
+    model,
+    device,
+    cfg,
+    episodes,
+    sims,
+    c_puct,
+    temp,
+    dt_ms,
+    max_steps,
+    score_scale,
+    death_penalty,
+    temp_final,
+    temp_decay_steps,
+    seed,
+):
     os.makedirs(DATA_DIR, exist_ok=True)
     rng = random.Random(seed)
 
@@ -136,6 +151,10 @@ def run_selfplay(model, device, cfg, episodes, sims, c_puct, temp, dt_ms, max_st
             temp=temp,
             dt_ms=dt_ms,
             max_steps=max_steps,
+            score_scale=score_scale,
+            death_penalty=death_penalty,
+            temp_final=temp_final,
+            temp_decay_steps=temp_decay_steps,
             seed=ep_seed,
         )
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -331,6 +350,10 @@ def train_worker(stop_event, args, cfg, input_shape, action_size, device, model_
             temp=args.selfplay_temp,
             dt_ms=args.selfplay_dt_ms,
             max_steps=args.selfplay_max_steps,
+            score_scale=args.selfplay_score_scale,
+            death_penalty=args.selfplay_death_penalty,
+            temp_final=args.selfplay_temp_final,
+            temp_decay_steps=args.selfplay_temp_decay_steps,
             seed=args.seed,
         )
 
@@ -350,6 +373,10 @@ def main():
     parser.add_argument("--selfplay-temp", type=float, default=1.0)
     parser.add_argument("--selfplay-dt-ms", type=int, default=32)
     parser.add_argument("--selfplay-max-steps", type=int, default=1200)
+    parser.add_argument("--selfplay-score-scale", type=float, default=200.0)
+    parser.add_argument("--selfplay-death-penalty", type=float, default=50.0)
+    parser.add_argument("--selfplay-temp-final", type=float, default=0.3)
+    parser.add_argument("--selfplay-temp-decay-steps", type=int, default=80)
     parser.add_argument("--train-epochs", type=int, default=5)
     parser.add_argument("--train-batch", type=int, default=64)
     parser.add_argument("--no-gating", action="store_true")
@@ -456,6 +483,10 @@ def main():
                 temp=args.selfplay_temp,
                 dt_ms=args.selfplay_dt_ms,
                 max_steps=args.selfplay_max_steps,
+                score_scale=args.selfplay_score_scale,
+                death_penalty=args.selfplay_death_penalty,
+                temp_final=args.selfplay_temp_final,
+                temp_decay_steps=args.selfplay_temp_decay_steps,
                 seed=args.seed,
             )
 

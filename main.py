@@ -804,7 +804,14 @@ def main():
                             bx = (player.x + TILE // 2) // TILE
                             by = (player.y + TILE // 2) // TILE
                             if bombs_left > 0 and (bx, by) not in bomb_positions:
-                                bombs.append({"x": bx, "y": by, "timer": BOMB_TIMER_MS})
+                                bombs.append({"x": bx, "y": by, "timer": BOMB_TIMER_MS, "size": BOMB_SIZE})
+                                bomb_positions.add((bx, by))
+                                bombs_left -= 1
+                        elif event.key == pygame.K_b:
+                            bx = (player.x + TILE // 2) // TILE
+                            by = (player.y + TILE // 2) // TILE
+                            if bombs_left > 0 and (bx, by) not in bomb_positions:
+                                bombs.append({"x": bx, "y": by, "timer": BOMB_TIMER_MS, "size": 30})
                                 bomb_positions.add((bx, by))
                                 bombs_left -= 1
             elif event.type == pygame.KEYUP:
@@ -937,10 +944,11 @@ def main():
             for b in exploded:
                 bombs.remove(b)
                 bomb_positions.discard((b["x"], b["y"]))
-                start_x = b["x"] - (BOMB_SIZE // 2)
-                start_y = b["y"] - (BOMB_SIZE // 2)
-                end_x = start_x + BOMB_SIZE
-                end_y = start_y + BOMB_SIZE
+                size = int(b.get("size", BOMB_SIZE))
+                start_x = b["x"] - (size // 2)
+                start_y = b["y"] - (size // 2)
+                end_x = start_x + size
+                end_y = start_y + size
                 for y in range(start_y, end_y):
                     for x in range(start_x, end_x):
                         if x < 0 or y < 0 or x >= GRID_W or y >= GRID_H:

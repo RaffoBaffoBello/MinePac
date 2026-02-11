@@ -1,5 +1,6 @@
 import argparse
 import json
+import math
 import os
 import random
 import time
@@ -58,7 +59,21 @@ def select_action(policy, temperature):
     return int(np.random.choice(len(policy), p=scaled))
 
 
-def play_episode(model, device, config, sims, c_puct, temp, dt_ms, max_steps, seed=None):
+def play_episode(
+    model,
+    device,
+    config,
+    sims,
+    c_puct,
+    temp,
+    dt_ms,
+    max_steps,
+    score_scale,
+    death_penalty,
+    temp_final,
+    temp_decay_steps,
+    seed=None,
+):
     env = PacEnv(config, seed=seed)
     action_size = env.action_count()
     mcts = MCTS(
@@ -83,11 +98,18 @@ def play_episode(model, device, config, sims, c_puct, temp, dt_ms, max_steps, se
         observations.append(np.asarray(planes, dtype=np.float32))
         policies.append(policy.astype(np.float32))
 
-        action = select_action(policy, temp)
+        temp_eff = temp if steps < temp_decay_steps else temp_final
+        action = select_action(policy, temp_eff)
         env.step_action(action, dt_ms=dt_ms)
         steps += 1
 
-    outcome = env.terminal_value()
+    if env.game_won:
+        outcome = 1.0
+    else:
+        if score_scale <= 0:
+            outcome = -1.0 if env.game_over else 0.0
+        else:
+            outcome = math.tanh((env.score - death_penalty) / float(score_scale))
     if channels is None:
         channels = len(env.get_observation()[0])
     return {
@@ -111,6 +133,10 @@ def main():
     parser.add_argument("--temp", type=float, default=1.0)
     parser.add_argument("--dt-ms", type=int, default=32)
     parser.add_argument("--max-steps", type=int, default=2000)
+    parser.add_argument("--score-scale", type=float, default=200.0)
+    parser.add_argument("--death-penalty", type=float, default=50.0)
+    parser.add_argument("--temp-final", type=float, default=0.3)
+    parser.add_argument("--temp-decay-steps", type=int, default=80)
     parser.add_argument("--seed", type=int, default=None)
     args = parser.parse_args()
 
@@ -145,6 +171,10 @@ def main():
             temp=args.temp,
             dt_ms=args.dt_ms,
             max_steps=args.max_steps,
+            score_scale=args.score_scale,
+            death_penalty=args.death_penalty,
+            temp_final=args.temp_final,
+            temp_decay_steps=args.temp_decay_steps,
             seed=seed,
         )
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -161,6 +191,7 @@ def main():
                         "score": result["score"],
                         "level": result["level"],
                         "outcome": result["outcome"],
+                        "value": float(result["value"][0]) if len(result["value"]) else 0.0,
                         "file": out_path,
                     }
                 )

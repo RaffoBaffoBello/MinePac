@@ -3,6 +3,7 @@ import glob
 import json
 import os
 import shutil
+import sys
 
 import numpy as np
 import torch
@@ -53,19 +54,27 @@ def load_data(data_dir):
     if not files:
         raise FileNotFoundError(f"No az_*.npz files found in {data_dir}")
 
+    print(f"Loading {len(files)} self-play files...")
+    sys.stdout.flush()
+
     obs_list = []
     policy_list = []
     value_list = []
 
-    for path in files:
+    for idx, path in enumerate(files, start=1):
         data = np.load(path)
         obs_list.append(data["obs"])
         policy_list.append(data["policy"])
         value_list.append(data["value"])
+        if idx % 100 == 0 or idx == len(files):
+            print(f"  loaded {idx}/{len(files)}")
+            sys.stdout.flush()
 
     obs = np.concatenate(obs_list, axis=0).astype(np.float32)
     policy = np.concatenate(policy_list, axis=0).astype(np.float32)
     value = np.concatenate(value_list, axis=0).astype(np.float32)
+    print(f"Loaded samples: {len(obs)} | obs shape {obs.shape} | policy shape {policy.shape}")
+    sys.stdout.flush()
     return obs, policy, value
 
 

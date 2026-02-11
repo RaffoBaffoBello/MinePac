@@ -191,6 +191,8 @@ Notes:
 - `az_selfplay.py` uses MCTS for each move (default 64 sims).
 - The action space is 20 actions: 5 movement directions × 4 action types.
 - You can tune `--sims`, `--temp`, `--dt-ms`, and `--max-steps` for speed vs. quality.
+- Value targets are score‑shaped by default to avoid sparse win/loss learning. You can tune
+  `--score-scale`, `--death-penalty`, and temperature decay params.
 
 **AlphaZero Loop (Watch + Learn)**
 Run a live loop that:
@@ -212,6 +214,13 @@ To keep the window open while training runs in the background:
 python az_loop.py --train-while-watching --watch-episodes 0
 ```
 The watcher auto‑reloads the latest model every few seconds.
+
+**Plot AlphaZero Progress**
+```bash
+pip install matplotlib
+python az_plot.py
+```
+This writes `az_progress.png` from `az_log.jsonl`.
 
 **Notes**
 - If the agent cannot control the game on macOS, enable Accessibility for your terminal or IDE.
