@@ -1,240 +1,184 @@
 # MinePac
 
-A Pac‑Man‑inspired maze game with building, bombs, destructible walls, and an image‑reveal mechanic. Built with Python + Pygame.
+MinePac is a Pac-Man-style maze game built with Python + Pygame, plus two learning pipelines:
+- a screen-based RL agent (`rl_train.py`, `rl_agent.py`)
+- a headless AlphaZero-style pipeline (`az_*` scripts)
 
-**Highlights**
-- Place and erase blocks in the maze.
-- Bombs that clear a 6×6 area after a delay.
-- Cyan power ball temporarily lets you break walls by pushing into them.
-- Multi‑level progression by reaching a score threshold and trapping yourself.
-- Image reveal: clearing tiles uncovers a hidden picture.
+## What Is In This Repo
+- `main.py`: playable game
+- `config.json`: runtime game configuration
+- `assets/reveal.jpg`: optional reveal image
+- `pac_env.py`: headless environment used by AlphaZero scripts
+- `rl_train.py`, `rl_agent.py`, `plot_rl_progress.py`: RL pipeline
+- `az_selfplay.py`, `az_train.py`, `az_eval.py`, `az_play.py`, `az_loop.py`, `az_plot.py`: AlphaZero-style pipeline
 
-**Controls**
-| Action | Key |
-| --- | --- |
-| Move | Arrow keys (hold to move) |
-| Place block | `C` |
-| Erase block | `Space` |
-| Drop bomb | `V` |
-| Pause | `P` |
-| Quit | `Esc` |
-
-**Requirements**
+## Requirements
 - Python 3.10+
-- `pygame`
+- macOS is recommended for the screen-control scripts (`Quartz`, global key input)
 
-**Install**
+Install base game:
 ```bash
 pip install pygame
 ```
 
-**Run**
+Install AI dependencies:
+```bash
+pip install torch numpy pillow mss pynput pyobjc-framework-Quartz matplotlib
+```
+
+## Run The Game
 ```bash
 python main.py
 ```
 
-**Reveal Image**
-Place your image at:
-```
-assets/reveal.jpg
-```
-As you clear tiles, the image will appear in 10×10 tile blocks (configurable).
+## Controls
+- `Arrow keys` (hold): move
+- `C`: place a block in facing direction
+- `Space`: erase a block in facing direction (with dig timer)
+- `V`: drop normal bomb
+- `B`: drop nuke bomb (limited per life)
+- `P`: pause/resume
+- `Esc`: quit
+- `Y` / `N` at `GAME OVER`: continue / restart from level 1
 
-**Configuration**
-Edit `config.json` to tune gameplay:
-- `tile_size`: size of each grid tile in pixels
-- `cyan_effect_ms`: duration of cyan power in ms
-- `bomb_timer_ms`: bomb fuse time in ms
-- `bomb_size`: bomb blast size (tiles)
-- `reveal_block`: image reveal block size (tiles)
-- `ghosts_first_level`: number of ghosts at level 1
-- `ghosts_per_level`: additional ghosts per level
-- `ghost_speed_multiplier`: speed multiplier per level
-- `max_bombs_per_life`: bombs available per life
-- `points_per_level`: score required per level
+## Current Gameplay Rules
+- Start with 3 lives.
+- `V` bombs use the configured bomb count per life.
+- `B` nukes use a separate configured count per life.
+- Cyan power temporarily enables block-breaking by contact.
+- Level-up requires both:
+  - reaching the score threshold for next level
+  - trapping yourself (blocked on all four sides)
+- `You Win!` appears when all reveal blocks are cleared, then auto-restarts to level 1 after 10 seconds.
+- High score and level are persisted.
 
-**Records**
-The highest score and level are stored in:
-```
-record.json
-```
+## Configuration (`config.json`)
+Current keys used by the game:
+- `tile_size`
+- `cyan_effect_ms`
+- `bomb_timer_ms`
+- `bomb_size`
+- `reveal_block`
+- `ghosts_first_level`
+- `ghosts_per_level`
+- `ghost_speed_multiplier`
+- `max_bombs_per_life`
+- `max_nukes_per_life`
+- `points_per_level`
 
-**Imitation Learning (AI Agent)**
-The project includes a simple imitation learning pipeline that learns from screen input and your keyboard actions.
+## Persistent Files
+- `record.json`: best score + best level
+- `score.json`: live state written by `main.py` (used by RL scripts)
 
-**AI Requirements**
-- `mss` (screen capture)
-- `pynput` (keyboard input/output)
-- `pyobjc-framework-Quartz` (macOS window capture)
-- `pillow` (image preprocessing)
-- `torch` (training/inference)
+## RL Pipeline (Screen-Based)
+This pipeline reads the game window, sends global key events, and learns a DQN from score/life changes.
 
-**Install AI Dependencies**
+### Train
+1. Start the game first:
 ```bash
-pip install mss pynput pyobjc-framework-Quartz pillow torch
+python main.py
 ```
-
-**1) Collect Data**
-```bash
-python collect_data.py
-```
-This records frames and your key presses into `.npz` files under `data/`.
-You can run it multiple times; training will merge all `.npz` files automatically.
-
-**2) Train**
-```bash
-python train_model.py
-```
-This produces `model.pth` and `model_meta.json`.
-
-**3) Run the Agent**
-```bash
-python ai_agent.py
-```
-The agent reads the game window image and presses keys globally.
-Click the game window to focus it before running.
-
-**4) Self-Training Loop (Optional)**
-This project includes a self‑improving loop:
-- the agent plays the game
-- when the score increases quickly, it saves the recent frames + actions (best moves)
-- when Pac‑Man dies, those recent moves are saved as “bad samples” and penalized during training
-- it periodically fine‑tunes the model and resumes play
-
-Run it like this (default: retrain after ~2000 new samples):
-```bash
-python self_train_agent.py
-```
-This uses `score.json` written by the game to detect score changes.
-
-**Self-Training Log**
-Each retrain cycle writes a line to:
-```
-self_train_log.jsonl
-```
-Each line records the version and the max score reached by that version, so you can plot improvement later.
-
-**Plot Progress**
-```bash
-pip install matplotlib
-python plot_progress.py
-```
-This produces `self_train_progress.png`.
-
-**Start from Scratch**
-To start fresh, delete:
-- `model.pth`
-- `model_meta.json`
-- `data/*.npz`
-- `self_train_log.jsonl`
-
-To start from random weights, edit `PAC_START_RANDOM` at the top of `self_train_agent.py`.
-When set to `1`, it clears existing model/data/logs before starting. Set it to `0` to keep existing data.
-
-**Reinforcement Learning (Experimental)**
-You can also train with reinforcement learning directly from the game screen:
+2. In another terminal:
 ```bash
 python rl_train.py
 ```
-This uses a DQN agent with epsilon‑greedy exploration and bombs enabled.
-It reads rewards from `score.json`, so keep the game running and focused.
 
-To run the trained RL policy (no learning):
+Behavior:
+- auto-resumes from `rl_checkpoint.pt` if present
+- autosaves checkpoint and metrics every 5 minutes
+- writes metrics to `rl_log.jsonl`
+
+### Run trained RL policy
 ```bash
 python rl_agent.py
 ```
 
-**RL Checkpoints + Metrics**
-- Checkpoints are saved every 5 minutes to `rl_checkpoint.pt` and auto‑loaded on restart.
-- Metrics are logged to `rl_log.jsonl`.
-Plot progress:
+### Plot RL metrics
 ```bash
-pip install matplotlib
 python plot_rl_progress.py
 ```
+Output: `rl_progress.png`
 
-**AlphaZero-Style Self-Play (Experimental)**
-This uses the headless game engine in `pac_env.py` (same mechanics as the game) and runs MCTS + a policy/value CNN.
+### RL window matching (optional)
+You can override target window matching:
+- `PAC_WINDOW_TITLE`
+- `PAC_WINDOW_OWNER`
 
-1) Generate self-play data:
+Example:
 ```bash
-python az_selfplay.py --episodes 5
-```
-Self-play data is saved under:
-```
-data/az/
+PAC_WINDOW_TITLE="VideoLeo Pac-Maze" PAC_WINDOW_OWNER="Python" python rl_train.py
 ```
 
-2) Train the policy/value network:
+## AlphaZero-Style Pipeline (Headless Self-Play + MCTS)
+This pipeline does not use screen capture for training. It uses `pac_env.py` directly.
+
+### 1) Generate self-play data
 ```bash
-python az_train.py --epochs 10
+python az_selfplay.py --episodes 100 --sims 64
 ```
-This saves:
+Output files: `data/az/az_*.npz`
+Log file: `az_log.jsonl`
+
+### 2) Train policy/value model
+```bash
+python az_train.py --epochs 10 --batch 64
 ```
-az_model.pt
+Outputs:
+- candidate: `az_candidate.pt`
+- best model: `az_model.pt` (promoted by gating)
+
+### 3) Evaluate best vs candidate (optional)
+```bash
+python az_eval.py --best az_model.pt --candidate az_candidate.pt --games 12 --sims 64
 ```
 
-3) Watch the AlphaZero model play (Pygame window):
+### 4) Watch model play
 ```bash
 python az_play.py
 ```
-Optional (slower, stronger):
+Useful options:
 ```bash
-python az_play.py --mcts-sims 64
+python az_play.py --mcts-sims 32
+python az_play.py --temperature 1.2 --force-move
 ```
 
-**Evaluation Gating**
-`az_train.py` now saves a candidate model and evaluates it vs the current best.
-If it wins enough, it promotes the candidate to `az_model.pt`.
-
-Notes:
-- `az_selfplay.py` uses MCTS for each move (default 64 sims).
-- The action space is 20 actions: 5 movement directions × 4 action types.
-- You can tune `--sims`, `--temp`, `--dt-ms`, and `--max-steps` for speed vs. quality.
-- Value targets are score‑shaped by default to avoid sparse win/loss learning. You can tune
-  `--score-scale`, `--death-penalty`, and temperature decay params.
-
-**AlphaZero Loop (Watch + Learn)**
-Run a live loop that:
-1) generates self‑play data
-2) trains + gates the model
-3) opens a Pygame window and plays the current best model
-
+### Plot AlphaZero progress
 ```bash
-python az_loop.py
+python az_plot.py
 ```
-Key options:
-- `--cycles 0` (default) runs forever
-- `--selfplay-episodes`, `--train-epochs`
-- `--watch-mcts-sims` to use MCTS during watching (slower but stronger)
+Output: `az_progress.png`
 
-**Train While Watching (Background)**
-To keep the window open while training runs in the background:
+## Continuous Loop (`az_loop.py`)
+`az_loop.py` can combine self-play, training, and watching.
+
+Sequential loop:
+```bash
+python az_loop.py --cycles 0
+```
+(`--cycles 0` means infinite)
+
+Train while watching (background training + hot reload model in viewer):
 ```bash
 python az_loop.py --train-while-watching --watch-episodes 0
 ```
-The watcher auto‑reloads the latest model every few seconds.
 
-**Plot AlphaZero Progress**
+Useful loop options:
+- self-play: `--selfplay-episodes`, `--selfplay-sims`, `--selfplay-temp`, `--selfplay-max-steps`
+- score-shaped targets: `--selfplay-score-scale`, `--selfplay-death-penalty`, `--selfplay-temp-final`, `--selfplay-temp-decay-steps`
+- training: `--train-epochs`, `--train-batch`, `--no-gating`
+- watch: `--watch-mcts-sims`, `--watch-temperature`, `--watch-force-move`, `--watch-fps`, `--reload-secs`
+
+## Overnight Training Example (AlphaZero)
 ```bash
-pip install matplotlib
-python az_plot.py
+python az_selfplay.py --episodes 2000 --sims 32 --temp 1.0 --temp-final 0.3 --temp-decay-steps 80 --score-scale 200 --death-penalty 50
+python az_train.py --epochs 20 --batch 64
+python az_play.py --mcts-sims 32
 ```
-This writes `az_progress.png` from `az_log.jsonl`.
 
-**Notes**
-- If the agent cannot control the game on macOS, enable Accessibility for your terminal or IDE.
-- On Apple Silicon, PyTorch can use the `mps` backend for faster training/inference.
-- The agent only triggers `C` and `Space` when a movement key is active (to match game rules).
-- The AI is only as good as the data. Record more varied play for better results.
+## Troubleshooting
+- If RL scripts cannot control keys on macOS, enable Accessibility permissions for your terminal/IDE.
+- If RL scripts cannot find the game window, keep the game visible and set `PAC_WINDOW_TITLE` / `PAC_WINDOW_OWNER`.
+- On Apple Silicon, PyTorch uses MPS when available.
 
-**Build Windows .exe**
-Build on Windows using PyInstaller:
-```bash
-pip install pyinstaller pygame
-pyinstaller --onefile --windowed --add-data "assets;assets" main.py
-```
-The executable will be in `dist/main.exe`.
-
-**License**
+## License
 MIT. See `LICENSE`.

@@ -43,6 +43,7 @@ DEFAULT_CONFIG = {
     "ghosts_per_level": 1,
     "ghost_speed_multiplier": 1.02,
     "max_bombs_per_life": 10,
+    "max_nukes_per_life": 3,
     "points_per_level": 1000
 }
 
@@ -77,6 +78,7 @@ GHOSTS_FIRST_LEVEL = int(CONFIG["ghosts_first_level"])
 GHOSTS_PER_LEVEL = int(CONFIG["ghosts_per_level"])
 GHOST_SPEED_MULTIPLIER = float(CONFIG["ghost_speed_multiplier"])
 MAX_BOMBS_PER_LIFE = int(CONFIG["max_bombs_per_life"])
+MAX_NUKES_PER_LIFE = int(CONFIG["max_nukes_per_life"])
 POINTS_PER_LEVEL = int(CONFIG["points_per_level"])
 
 
@@ -528,7 +530,11 @@ def draw(screen, walls, dots, power, cyan, player, ghosts, score, lives, bombs_l
         warn = font.render(reveal_error, True, WHITE)
         screen.blit(warn, (10, 2))
     else:
-        help_text = font.render("C = place blocks  |  Space = erase blocks  |  V = drop bombs  |  P = pause", True, WHITE)
+        help_text = font.render(
+            "C = place blocks  |  Space = erase blocks  |  V = drop bombs  |  B = nuke  |  P = pause",
+            True,
+            WHITE,
+        )
         screen.blit(help_text, (10, 2))
         record_text = font.render(f"Record: {record_score:06d} - Level: {record_level}", True, WHITE)
         screen.blit(record_text, (10 + help_text.get_width() + 16, 2))
@@ -689,13 +695,14 @@ def main():
                 g.dir = random.choice([(1, 0), (-1, 0), (0, 1), (0, -1)])
 
     def apply_player_hit():
-        nonlocal lives, game_over, invuln_timer, break_blocks, break_timer, bombs_left
+        nonlocal lives, game_over, invuln_timer, break_blocks, break_timer, bombs_left, nukes_left
         lives -= 1
         player.x, player.y = player_start
         player.dir = (0, 0)
         break_blocks = False
         break_timer = 0
         bombs_left = MAX_BOMBS_PER_LIFE
+        nukes_left = MAX_NUKES_PER_LIFE
         reset_ghosts()
         invuln_timer = 2000
         if lives <= 0:
@@ -745,6 +752,7 @@ def main():
     bombs = []
     bomb_positions = set()
     bombs_left = MAX_BOMBS_PER_LIFE
+    nukes_left = MAX_NUKES_PER_LIFE
     revealed, reveal_counts = init_reveal_state()
     record_score, record_level = load_record()
     last_score_write = 0.0
@@ -765,7 +773,48 @@ def main():
     game_over = False
     game_over_choice = None
     game_won = False
+    game_won_timer = 0
     paused = False
+
+    def reset_to_level_one():
+        nonlocal level, wall_color, current_maze, walls, dots, power, cyan, player_start, ghost_starts_all
+        nonlocal base_starts, ghost_starts, player, ghosts, score, lives, power_timer, invuln_timer
+        nonlocal dig_timers, place_cooldown, dig_requested, dig_requested_time, place_requested_time
+        nonlocal break_blocks, break_timer, revealed, reveal_counts, bombs, bomb_positions, bombs_left, nukes_left
+        nonlocal paused, game_won, game_over, game_over_choice, game_won_timer
+
+        level = 1
+        wall_color = wall_color_for_level(level)
+        current_maze = make_level_maze(level)
+        walls, dots, power, cyan, player_start, ghost_starts_all = build_level(current_maze)
+        base_starts = ghost_starts_all[:1]
+        ghost_starts = add_extra_ghosts(current_maze, base_starts, ghost_count_for_level(level) - len(base_starts))
+        player = Player(*player_start)
+        ghosts = [
+            Ghost(x, y, GHOST_COLORS[i % len(GHOST_COLORS)], ghost_speed_for_level(level))
+            for i, (x, y) in enumerate(ghost_starts)
+        ]
+        score = 0
+        lives = 3
+        power_timer = 0
+        invuln_timer = 0
+        dig_timers = {}
+        place_cooldown = 0
+        dig_requested = False
+        dig_requested_time = 0
+        place_requested_time = 0
+        break_blocks = False
+        break_timer = 0
+        revealed, reveal_counts = init_reveal_state()
+        bombs = []
+        bomb_positions = set()
+        bombs_left = MAX_BOMBS_PER_LIFE
+        nukes_left = MAX_NUKES_PER_LIFE
+        paused = False
+        game_won = False
+        game_over = False
+        game_over_choice = None
+        game_won_timer = 0
 
     running = True
     while running:
@@ -810,10 +859,10 @@ def main():
                         elif event.key == pygame.K_b:
                             bx = (player.x + TILE // 2) // TILE
                             by = (player.y + TILE // 2) // TILE
-                            if bombs_left > 0 and (bx, by) not in bomb_positions:
+                            if nukes_left > 0 and (bx, by) not in bomb_positions:
                                 bombs.append({"x": bx, "y": by, "timer": BOMB_TIMER_MS, "size": 30})
                                 bomb_positions.add((bx, by))
-                                bombs_left -= 1
+                                nukes_left -= 1
             elif event.type == pygame.KEYUP:
                 if event.key in arrow_state:
                     arrow_state[event.key] = False
@@ -840,48 +889,32 @@ def main():
                 bombs = []
                 bomb_positions = set()
                 bombs_left = MAX_BOMBS_PER_LIFE
+                nukes_left = MAX_NUKES_PER_LIFE
                 paused = False
                 game_won = False
                 game_over = False
                 game_over_choice = None
             elif game_over_choice == "no":
-                level = 1
-                wall_color = wall_color_for_level(level)
-                current_maze = make_level_maze(level)
-                walls, dots, power, cyan, player_start, ghost_starts_all = build_level(current_maze)
-                base_starts = ghost_starts_all[:1]
-                ghost_starts = add_extra_ghosts(current_maze, base_starts, ghost_count_for_level(level) - len(base_starts))
-                player = Player(*player_start)
-                ghosts = [
-                    Ghost(x, y, GHOST_COLORS[i % len(GHOST_COLORS)], ghost_speed_for_level(level))
-                    for i, (x, y) in enumerate(ghost_starts)
-                ]
-                score = 0
-                lives = 3
-                power_timer = 0
-                invuln_timer = 0
-                dig_timers = {}
-                place_cooldown = 0
-                dig_requested = False
-                dig_requested_time = 0
-                place_requested_time = 0
-                break_blocks = False
-                break_timer = 0
-                revealed, reveal_counts = init_reveal_state()
-                bombs = []
-                bomb_positions = set()
-                bombs_left = MAX_BOMBS_PER_LIFE
-                paused = False
-                game_won = False
-                game_over = False
-                game_over_choice = None
+                reset_to_level_one()
             continue
         if game_won:
             draw(screen, walls, dots, power, cyan, player, ghosts, score, lives, bombs_left, record_score, record_level, dig_timers, wall_color, level, reveal_image, revealed, reveal_error, bombs, break_blocks)
-            font = pygame.font.SysFont("Arial", 36)
-            msg = font.render("YOU WON!", True, WHITE)
-            screen.blit(msg, (WIDTH // 2 - msg.get_width() // 2, HEIGHT // 2 - 20))
+            box_w = int(WIDTH * 0.8)
+            box_h = int(HEIGHT * 0.22)
+            box_x = (WIDTH - box_w) // 2
+            box_y = (HEIGHT - box_h) // 2
+            pygame.draw.rect(screen, WHITE, pygame.Rect(box_x, box_y, box_w, box_h), border_radius=8)
+            title_font = pygame.font.SysFont("Arial", 54, bold=True)
+            sub_font = pygame.font.SysFont("Arial", 26)
+            remaining = max(0, (game_won_timer + 999) // 1000)
+            title = title_font.render("You Win!", True, BLACK)
+            subtitle = sub_font.render(f"Restarting in {remaining}s", True, BLACK)
+            screen.blit(title, (WIDTH // 2 - title.get_width() // 2, box_y + 12))
+            screen.blit(subtitle, (WIDTH // 2 - subtitle.get_width() // 2, box_y + 70))
             pygame.display.flip()
+            game_won_timer -= dt
+            if game_won_timer <= 0:
+                reset_to_level_one()
             continue
         if paused:
             draw(screen, walls, dots, power, cyan, player, ghosts, score, lives, bombs_left, record_score, record_level, dig_timers, wall_color, level, reveal_image, revealed, reveal_error, bombs, break_blocks)
@@ -1073,6 +1106,7 @@ def main():
             bombs = []
             bomb_positions = set()
             bombs_left = MAX_BOMBS_PER_LIFE
+            nukes_left = MAX_NUKES_PER_LIFE
             game_won = False
             if level > record_level:
                 record_level = level
@@ -1080,6 +1114,7 @@ def main():
             continue
         if not game_won and len(revealed) >= total_reveal_blocks:
             game_won = True
+            game_won_timer = 10000
 
         draw(screen, walls, dots, power, cyan, player, ghosts, score, lives, bombs_left, record_score, record_level, dig_timers, wall_color, level, reveal_image, revealed, reveal_error, bombs, break_blocks)
         pygame.display.flip()

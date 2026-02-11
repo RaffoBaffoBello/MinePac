@@ -22,7 +22,7 @@ GAME_OVER_HOLD_SEC = 0.5
 GAME_OVER_COOLDOWN_SEC = 2.0
 
 FRAME_SIZE = (96, 96)
-STACK_SIZE = 64
+STACK_SIZE = 4
 
 CHECKPOINT_PATH = os.path.join(os.path.dirname(__file__), "rl_checkpoint.pt")
 
