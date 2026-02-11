@@ -7,7 +7,7 @@
   "ghosts_first_level": 4,
   "ghosts_per_level": 2,
   "ghost_speed_multiplier": 1.03,
-  "max_bombs_per_life": 10,
+  "max_bombs_per_life": 3,
   "max_nukes_per_life": 1,
   "points_per_level": 2000
 }
